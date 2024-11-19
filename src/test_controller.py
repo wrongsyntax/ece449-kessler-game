@@ -18,8 +18,9 @@ class TestController(KesslerController):
         thrust = 0
         turn_rate = 90
         fire = True
+        drop_mine = False
         self.eval_frames += 1
-        return thrust, turn_rate, fire, False
+        return thrust, turn_rate, fire, drop_mine
 
     @property
     def name(self) -> str:
