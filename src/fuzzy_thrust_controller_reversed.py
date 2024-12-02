@@ -4,7 +4,7 @@ from typing import Dict, Tuple
 import numpy as np
 import skfuzzy as fuzz
 from skfuzzy import control as ctrl
-from kesslergame import KesslerController
+from kesslergame import KesslerController, GraphicsType  # Ensure GraphicsType is imported if used
 
 def normalize_angle(angle):
     """Normalize angle to [0, 360] range"""

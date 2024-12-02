@@ -12,7 +12,7 @@ from graphics_both import GraphicsBoth
 
 # Load optimized parameters if available
 
-with open('fixed_best_parameters.json', 'r') as f:
+with open('best_parameters.json', 'r') as f:
     optimized_params = json.load(f)
 optimized_controller = FuzzyThrustControllerReversed(
     thrust_params=optimized_params['thrust_params'],

@@ -5,18 +5,64 @@ import json
 from deap import base, creator, tools, algorithms
 import numpy as np
 from fuzzy_thrust_controller_reversed import FuzzyThrustControllerReversed
-from scenario_test import run_simulation
+from ga_scenario_test import run_simulation
 from typing import List, Tuple, Dict
 
+
+# Define custom crossover and mutation operators
+def mate_and_sort(ind1, ind2):
+    """
+    Custom crossover that performs two-point crossover and sorts parameters for each MF.
+    """
+    # Perform a standard two-point crossover
+    tools.cxTwoPoint(ind1, ind2)
+
+    # Define the number of genes per membership function
+    genes_per_mf = 4
+    total_mfs = 10  # 5 thrust + 5 turn_rate
+
+    for i in range(total_mfs):
+        start = i * genes_per_mf
+        end = start + genes_per_mf
+        # Sort the genes for each MF
+        sorted_genes = sorted(ind1[start:end])
+        ind1[start:end] = sorted_genes
+
+        sorted_genes = sorted(ind2[start:end])
+        ind2[start:end] = sorted_genes
+
+    return ind1, ind2
+
+
+def mutate_and_sort(individual, mu=0, sigma=10, indpb=0.2):
+    """
+    Custom mutation that applies Gaussian mutation and sorts parameters for each MF.
+    """
+    # Apply Gaussian mutation
+    tools.mutGaussian(individual, mu, sigma, indpb)
+
+    # Define the number of genes per membership function
+    genes_per_mf = 4
+    total_mfs = 10  # 5 thrust + 5 turn_rate
+
+    for i in range(total_mfs):
+        start = i * genes_per_mf
+        end = start + genes_per_mf
+        # Sort the genes for each MF
+        sorted_genes = sorted(individual[start:end])
+        individual[start:end] = sorted_genes
+
+    return individual,
+
+
 class GeneticAlgorithm:
-    def __init__(self, population_size=20, generations=30, crossover_prob=0.7, mutation_prob=0.2):
+    def __init__(self, population_size=3, generations=4, crossover_prob=0.7, mutation_prob=0.2):
         self.population_size = population_size
         self.generations = generations
         self.crossover_prob = crossover_prob
         self.mutation_prob = mutation_prob
 
         # Define the ranges for each parameter
-        # Assuming each membership function boundary can vary within certain limits
         # Adjust these ranges based on domain knowledge
         self.param_ranges = {
             'thrust': {
@@ -40,10 +86,10 @@ class GeneticAlgorithm:
         for category, mfs in self.param_ranges.items():
             for mf, ranges in mfs.items():
                 # Each trapezoidal MF has 4 parameters
-                self.all_param_ranges.append( (ranges['min1'], ranges['max1']) )  # p1
-                self.all_param_ranges.append( (ranges['min1'], ranges['max1']) )  # p2
-                self.all_param_ranges.append( (ranges['min2'], ranges['max2']) )  # p3
-                self.all_param_ranges.append( (ranges['min2'], ranges['max2']) )  # p4
+                self.all_param_ranges.append((ranges['min1'], ranges['max1']))  # p1
+                self.all_param_ranges.append((ranges['min1'], ranges['max1']))  # p2
+                self.all_param_ranges.append((ranges['min2'], ranges['max2']))  # p3
+                self.all_param_ranges.append((ranges['min2'], ranges['max2']))  # p4
 
         # Setup DEAP framework
         creator.create("FitnessMax", base.Fitness, weights=(1.0,))  # Maximizing fitness
@@ -55,9 +101,9 @@ class GeneticAlgorithm:
         self.toolbox.register("individual", self.initIndividual)
         self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
 
-        # Genetic operators
-        self.toolbox.register("mate", tools.cxBlend, alpha=0.5)
-        self.toolbox.register("mutate", tools.mutGaussian, mu=0, sigma=10, indpb=0.2)
+        # Register custom operators
+        self.toolbox.register("mate", mate_and_sort)
+        self.toolbox.register("mutate", mutate_and_sort, mu=0, sigma=10, indpb=0.2)
         self.toolbox.register("select", tools.selTournament, tournsize=3)
         self.toolbox.register("evaluate", self.fitness)
 
@@ -75,6 +121,7 @@ class GeneticAlgorithm:
     def decode_individual(self, individual: List[float]) -> Tuple[Dict[str, List[float]], Dict[str, List[float]]]:
         """
         Decode the individual list into thrust and turn_rate parameter dictionaries.
+        Each set of four parameters is sorted to satisfy a <= b <= c <= d.
         :param individual: List of floats representing the individual's genes.
         :return: Tuple of (thrust_params, turn_rate_params)
         """
@@ -82,10 +129,12 @@ class GeneticAlgorithm:
         turn_rate_params = {}
         idx = 0
         for mf in ['reverse_full', 'reverse_medium', 'coast', 'forward_medium', 'forward_full']:
-            thrust_params[mf] = individual[idx:idx+4]
+            # Sort each set of four parameters
+            thrust_params[mf] = sorted(individual[idx:idx + 4])
             idx += 4
         for mf in ['sharp_left', 'left', 'straight', 'right', 'sharp_right']:
-            turn_rate_params[mf] = individual[idx:idx+4]
+            # Sort each set of four parameters
+            turn_rate_params[mf] = sorted(individual[idx:idx + 4])
             idx += 4
         return thrust_params, turn_rate_params
 
@@ -133,23 +182,34 @@ class GeneticAlgorithm:
 
         return best_params
 
-    def save_best_parameters(self, best_params: Tuple[Dict[str, List[float]], Dict[str, List[float]]], filename='best_parameters.json'):
+    def save_best_parameters(self, best_params: Tuple[Dict[str, List[float]], Dict[str, List[float]]],
+                             filename='best_parameters.json'):
         """
-        Save the best parameters to a JSON file.
+        Save the best parameters to a JSON file in sorted order.
         :param best_params: Tuple of (thrust_params, turn_rate_params)
         :param filename: Name of the JSON file to save the parameters.
         """
+        # Ensure all parameters are sorted (redundant if already sorted in decode_individual)
+        for param_type in ['thrust_params', 'turn_rate_params']:
+            for mf in best_params[0] if param_type == 'thrust_params' else best_params[1]:
+                best_params[0][mf] = sorted(best_params[0][mf]) if param_type == 'thrust_params' else sorted(
+                    best_params[1][mf])
+
         with open(filename, 'w') as f:
             json.dump({
                 'thrust_params': best_params[0],
                 'turn_rate_params': best_params[1]
             }, f, indent=4)
 
+        print(f"Best parameters saved to '{filename}'.")
+
+
 def run_ga_optimization():
-    ga = GeneticAlgorithm(population_size=20, generations=30, crossover_prob=0.7, mutation_prob=0.2)
+    ga = GeneticAlgorithm(population_size=3, generations=4, crossover_prob=0.7, mutation_prob=0.2)
     best_params = ga.run()
     ga.save_best_parameters(best_params)
     return best_params
+
 
 if __name__ == "__main__":
     # Run the GA to optimize the controller

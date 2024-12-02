@@ -211,7 +211,7 @@ if __name__ == "__main__":
 
     ga.evolve()
 
-    best_chromosome = ga.best_chromosome
+    best_chromosome = ga.best_chromosome()
     thrust_params = best_chromosome[0].value
     turn_rate_params = best_chromosome[1].value
 
