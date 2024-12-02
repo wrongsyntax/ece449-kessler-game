@@ -1,23 +1,48 @@
-from time import time_ns
-from typing import Dict, Tuple
+# fuzzy_thrust_controller_reversed.py
 
+from typing import Dict, Tuple
 import numpy as np
 import skfuzzy as fuzz
 from skfuzzy import control as ctrl
-
 from kesslergame import KesslerController
-
 
 def normalize_angle(angle):
     """Normalize angle to [0, 360] range"""
     return angle % 360
 
-
 class FuzzyThrustControllerReversed(KesslerController):
-    def __init__(self):
+    def __init__(self, thrust_params=None, turn_rate_params=None):
+        """
+        Initialize the fuzzy controller with optional membership function parameters.
+        :param thrust_params: Dictionary containing membership function boundaries for thrust.
+        :param turn_rate_params: Dictionary containing membership function boundaries for turn_rate.
+        """
         self.danger_ctrl = None
         self.control_ctrl = None
         self.eval_frames = 0
+
+        # Default parameters if none provided
+        if thrust_params is None:
+            self.thrust_params = {
+                'reverse_full': [ -100, -100, -100, -50],
+                'reverse_medium': [ -70, -50, -20, -10],
+                'coast': [ -10, -5, 5, 10],
+                'forward_medium': [10, 20, 50, 70],
+                'forward_full': [50, 100, 100, 100]
+            }
+        else:
+            self.thrust_params = thrust_params
+
+        if turn_rate_params is None:
+            self.turn_rate_params = {
+                'sharp_left': [ -150, -150, -150, -100],
+                'left': [ -120, -120, -60, -60],
+                'straight': [ -70, -5, 5, 70],
+                'right': [60, 120, 120, 120],
+                'sharp_right': [100, 150, 150, 150]
+            }
+        else:
+            self.turn_rate_params = turn_rate_params
 
     def actions(self, ship_state: Dict, game_state: Dict) -> Tuple[float, float, bool, bool]:
         # Set up the fuzzy control systems
@@ -153,8 +178,11 @@ class FuzzyThrustControllerReversed(KesslerController):
         relative_vx = asteroid_vx - ship_vx
         relative_vy = asteroid_vy - ship_vy
 
-        time_to_collision = (closest_distance / np.sqrt(
-            relative_vx ** 2 + relative_vy ** 2)) if relative_vx != 0 or relative_vy != 0 else np.inf
+        speed = np.sqrt(relative_vx ** 2 + relative_vy ** 2)
+        if speed != 0:
+            time_to_collision = closest_distance / speed
+        else:
+            time_to_collision = np.inf
 
         return {
             "distance": closest_distance,
@@ -200,7 +228,7 @@ class FuzzyThrustControllerReversed(KesslerController):
         danger['high'] = fuzz.trapmf(danger.universe, [60, 70, 80, 90])
         danger['very_high'] = fuzz.trapmf(danger.universe, [80, 90, 100, 100])
 
-        # Add a default rule to ensure there's always an output
+        # Add rules
         danger_rules = [
             # Default rule - if no other rules match
             ctrl.Rule(~(time_to_collision['imminent'] | time_to_collision['close'] | time_to_collision['medium']),
@@ -268,44 +296,31 @@ class FuzzyThrustControllerReversed(KesslerController):
         relative_angle['back_left'] = fuzz.trapmf(relative_angle.universe, [-180, -180, -110, -90])
         relative_angle['back_right'] = fuzz.trapmf(relative_angle.universe, [90, 110, 180, 180])
 
-        # thrust.automf(5, names=['reverse_full', 'reverse_medium', 'coast', 'forward_medium', 'forward_full'])
+        # Define thrust membership functions using parameters
+        thrust['reverse_full'] = fuzz.trapmf(thrust.universe, self.thrust_params['reverse_full'])
+        thrust['reverse_medium'] = fuzz.trapmf(thrust.universe, self.thrust_params['reverse_medium'])
+        thrust['coast'] = fuzz.trapmf(thrust.universe, self.thrust_params['coast'])
+        thrust['forward_medium'] = fuzz.trapmf(thrust.universe, self.thrust_params['forward_medium'])
+        thrust['forward_full'] = fuzz.trapmf(thrust.universe, self.thrust_params['forward_full'])
 
-        thrust_max = ship_state['thrust_range'][1]
-        thrust_min = ship_state['thrust_range'][0]
-
-        thrust['reverse_full'] = fuzz.trapmf(thrust.universe, [thrust_min, thrust_min, -100, -50])
-        thrust['reverse_medium'] = fuzz.trapmf(thrust.universe, [-70, -50, -20, -10])
-        thrust['coast'] = fuzz.trapmf(thrust.universe, [-10, -5, 5, 10])
-        thrust['forward_medium'] = fuzz.trapmf(thrust.universe, [10, 20, 50, 70])
-        thrust['forward_full'] = fuzz.trapmf(thrust.universe, [50, 100, thrust_max, thrust_max])
-
-        turn_max = ship_state['turn_rate_range'][1]
-        turn_min = ship_state['turn_rate_range'][0]
-
-        # turn_rate['sharp_left'] = fuzz.trapmf(turn_rate.universe, [turn_min, turn_min, -120, -60])
-        # turn_rate['left'] = fuzz.trapmf(turn_rate.universe, [-100, -60, -30, -10])
-        # turn_rate['straight'] = fuzz.trapmf(turn_rate.universe, [-10, -5, 5, 10])
-        # turn_rate['right'] = fuzz.trapmf(turn_rate.universe, [10, 30, 60, 100])
-        # turn_rate['sharp_right'] = fuzz.trapmf(turn_rate.universe, [60, 120, turn_max, turn_max])
-
-        turn_rate['sharp_left'] = fuzz.trapmf(turn_rate.universe, [turn_min, turn_min, -150, -100])
-        turn_rate['left'] = fuzz.trapmf(turn_rate.universe, [turn_min, turn_min, -120, -60])
-        turn_rate['straight'] = fuzz.trapmf(turn_rate.universe, [-70, -5, 5, 70])
-        turn_rate['right'] = fuzz.trapmf(turn_rate.universe, [60, 120, turn_max, turn_max])
-        turn_rate['sharp_right'] = fuzz.trapmf(turn_rate.universe, [100, 150, turn_max, turn_max])
+        # Define turn_rate membership functions using parameters
+        turn_rate['sharp_left'] = fuzz.trapmf(turn_rate.universe, self.turn_rate_params['sharp_left'])
+        turn_rate['left'] = fuzz.trapmf(turn_rate.universe, self.turn_rate_params['left'])
+        turn_rate['straight'] = fuzz.trapmf(turn_rate.universe, self.turn_rate_params['straight'])
+        turn_rate['right'] = fuzz.trapmf(turn_rate.universe, self.turn_rate_params['right'])
+        turn_rate['sharp_right'] = fuzz.trapmf(turn_rate.universe, self.turn_rate_params['sharp_right'])
 
         # Rules
         control_rules = [
             # Emergency avoidance rules
             # If asteroid is in front, and we're not pointed away, reverse
             ctrl.Rule(
-                danger_input['very_high'] & relative_angle['front'] & ~heading_error['large_negative'] & ~heading_error[
-                    'large_positive'],
+                danger_input['very_high'] & relative_angle['front'] & ~heading_error['large_negative'] & ~heading_error['large_positive'],
                 thrust['reverse_full']),
 
             # If asteroid is in front-left or front-right and we're not pointed away, reverse
-            ctrl.Rule(danger_input['very_high'] & (relative_angle['front_left'] | relative_angle['front_right']) & ~
-            heading_error['large_negative'] & ~heading_error['large_positive'],
+            ctrl.Rule(danger_input['very_high'] & (relative_angle['front_left'] | relative_angle['front_right']) &
+                      ~heading_error['large_negative'] & ~heading_error['large_positive'],
                       thrust['reverse_medium']),
 
             # If asteroid is behind (back_left or back_right) and we're pointed away, go forward
@@ -318,8 +333,7 @@ class FuzzyThrustControllerReversed(KesslerController):
                       thrust['reverse_medium']),
 
             ctrl.Rule(
-                danger_input['high'] & (relative_angle['back_left'] | relative_angle['back_right']) & heading_error[
-                    'zero'],
+                danger_input['high'] & (relative_angle['back_left'] | relative_angle['back_right']) & heading_error['zero'],
                 thrust['forward_medium']),
 
             # Medium danger - more conservative

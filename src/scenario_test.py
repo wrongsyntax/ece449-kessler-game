@@ -1,47 +1,63 @@
-# -*- coding: utf-8 -*-
-# Copyright © 2022 Thales. All Rights Reserved.
-# NOTICE: This file is subject to the license agreement defined in file 'LICENSE', which is part of
-# this source code package.
+# scenario_test.py
 
 import time
+import json
 
-from kesslergame import Scenario, KesslerGame, GraphicsType
+from kesslergame import Scenario, GraphicsType, TrainerEnvironment, KesslerGame
 
-from src.fuzzy_thrust_controller import FuzzyThrustController
-from src.fuzzy_thrust_controller_reversed import FuzzyThrustControllerReversed
-from src.scott_dick_controller import ScottDickController
+from fuzzy_thrust_controller_reversed import FuzzyThrustControllerReversed
+# from scott_dick_controller import ScottDickController  # Uncomment if needed
 from test_controller import TestController
 from graphics_both import GraphicsBoth
 
+# Load optimized parameters if available
+
+with open('fixed_best_parameters.json', 'r') as f:
+    optimized_params = json.load(f)
+optimized_controller = FuzzyThrustControllerReversed(
+    thrust_params=optimized_params['thrust_params'],
+    turn_rate_params=optimized_params['turn_rate_params']
+)
+print("Loaded optimized controller parameters.")
+
+
 # Define game scenario
-my_test_scenario = Scenario(name='Test Scenario',
-                            num_asteroids=15,
-                            ship_states=[
-                                {'position': (400, 400), 'angle': 90, 'lives': 50, 'team': 1, "mines_remaining": 3},
-                                # {'position': (400, 600), 'angle': 90, 'lives': 50, 'team': 2, "mines_remaining": 3},
-                            ],
-                            map_size=(1000, 800),
-                            ammo_limit_multiplier=0,
-                            stop_if_no_ammo=False)
+my_test_scenario = Scenario(
+    name='Test Scenario',
+    num_asteroids=15,
+    ship_states=[
+        {'position': (400, 400), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
+    ],
+    map_size=(1000, 800),
+    ammo_limit_multiplier=0,
+    stop_if_no_ammo=False
+)
 
-# Define Game Settings
-game_settings = {'perf_tracker': True,
-                 'graphics_type': GraphicsType.Tkinter,
-                 'realtime_multiplier': 1,
-                 'graphics_obj': None,
-                 'frequency': 30}
+# Define Game Settings with Graphics Enabled
+game_settings = {
+    'perf_tracker': True,
+    'graphics_type': GraphicsType.Tkinter,  # Enabled graphics using Tkinter
+    'realtime_multiplier': 0,  # Adjust as needed; set to 0 for max-speed simulation without delay
+    'graphics_obj': None,
+    'frequency': 30
+}
 
-game = KesslerGame(settings=game_settings)  # Use this to visualize the game scenario
-# game = TrainerEnvironment(settings=game_settings)  # Use this for max-speed, no-graphics simulation
+# Choose the appropriate game environment
+# For visualization (might slow down simulations)
+game = KesslerGame(settings=game_settings)
+
+# For max-speed, no-graphics simulation
+# game = TrainerEnvironment(settings=game_settings)
 
 # Evaluate the game
 pre = time.perf_counter()
-score, perf_data = game.run(scenario=my_test_scenario, controllers=[FuzzyThrustControllerReversed(), FuzzyThrustController()])
+score, perf_data = game.run(scenario=my_test_scenario, controllers=[optimized_controller])
+post = time.perf_counter()
 
 # Print out some general info about the result
-print('Scenario eval time: '+str(time.perf_counter()-pre))
-print(score.stop_reason)
-print('Asteroids hit: ' + str([team.asteroids_hit for team in score.teams]))
-print('Deaths: ' + str([team.deaths for team in score.teams]))
-print('Accuracy: ' + str([team.accuracy for team in score.teams]))
-print('Mean eval time: ' + str([team.mean_eval_time for team in score.teams]))
+print('Scenario eval time: {:.2f} seconds'.format(post - pre))
+print('Scenario stop reason:', score.stop_reason)
+print('Asteroids hit:', [team.asteroids_hit for team in score.teams])
+print('Deaths:', [team.deaths for team in score.teams])
+print('Accuracy:', [team.accuracy for team in score.teams])
+print('Mean eval time:', [team.mean_eval_time for team in score.teams])
