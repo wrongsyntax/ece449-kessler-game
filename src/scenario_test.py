@@ -8,7 +8,7 @@ import time
 from kesslergame import Scenario, KesslerGame, GraphicsType
 
 from src.fuzzy_thrust_controller import FuzzyThrustController
-from src.fuzzy_thrust_controller_reversed import FuzzyThrustControllerReversed
+from src.fuzzy_thrust_controller_reversed import FireRangerevController
 from src.scott_dick_controller import ScottDickController
 from test_controller import TestController
 from graphics_both import GraphicsBoth
@@ -36,7 +36,7 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 
 # Evaluate the game
 pre = time.perf_counter()
-score, perf_data = game.run(scenario=my_test_scenario, controllers=[FuzzyThrustControllerReversed(), FuzzyThrustController()])
+score, perf_data = game.run(scenario=my_test_scenario, controllers=[FireRangerevController()])
 
 # Print out some general info about the result
 print('Scenario eval time: '+str(time.perf_counter()-pre))
