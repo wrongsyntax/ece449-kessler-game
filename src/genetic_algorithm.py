@@ -1,13 +1,12 @@
-# genetic_algorithm.py
-
 import random
 import json
+import time
 from deap import base, creator, tools, algorithms
 import numpy as np
 from fuzzy_thrust_controller_reversed import FuzzyThrustControllerReversed
 from ga_scenario_test import run_simulation
 from typing import List, Tuple, Dict
-
+from joblib import Parallel, delayed
 
 # Define custom crossover and mutation operators
 def mate_and_sort(ind1, ind2):
@@ -24,15 +23,10 @@ def mate_and_sort(ind1, ind2):
     for i in range(total_mfs):
         start = i * genes_per_mf
         end = start + genes_per_mf
-        # Sort the genes for each MF
-        sorted_genes = sorted(ind1[start:end])
-        ind1[start:end] = sorted_genes
-
-        sorted_genes = sorted(ind2[start:end])
-        ind2[start:end] = sorted_genes
+        ind1[start:end] = sorted(ind1[start:end])
+        ind2[start:end] = sorted(ind2[start:end])
 
     return ind1, ind2
-
 
 def mutate_and_sort(individual, mu=0, sigma=10, indpb=0.2):
     """
@@ -48,13 +42,11 @@ def mutate_and_sort(individual, mu=0, sigma=10, indpb=0.2):
     for i in range(total_mfs):
         start = i * genes_per_mf
         end = start + genes_per_mf
-        # Sort the genes for each MF
-        sorted_genes = sorted(individual[start:end])
-        individual[start:end] = sorted_genes
+        individual[start:end] = sorted(individual[start:end])
 
     return individual,
 
-
+# Define the GeneticAlgorithm class
 class GeneticAlgorithm:
     def __init__(self, population_size=3, generations=4, crossover_prob=0.7, mutation_prob=0.2):
         self.population_size = population_size
@@ -66,18 +58,18 @@ class GeneticAlgorithm:
         # Adjust these ranges based on domain knowledge
         self.param_ranges = {
             'thrust': {
-                'reverse_full': {'min1': -150, 'max1': -50, 'min2': -150, 'max2': -50},
-                'reverse_medium': {'min1': -100, 'max1': -30, 'min2': -30, 'max2': 0},
-                'coast': {'min1': -20, 'max1': -1, 'min2': 1, 'max2': 20},
-                'forward_medium': {'min1': 0, 'max1': 30, 'min2': 30, 'max2': 80},
-                'forward_full': {'min1': 40, 'max1': 150, 'min2': 150, 'max2': 150}
+                'reverse_full': {'min1': -480, 'max1': -480, 'min2': -300, 'max2': -200},
+                'reverse_medium': {'min1': -300, 'max1': -200, 'min2': -100, 'max2': -5},
+                'coast': {'min1': -100, 'max1': -5, 'min2': 5, 'max2': 100},
+                'forward_medium': {'min1': 5, 'max1': 100, 'min2': 200, 'max2': 300},
+                'forward_full': {'min1': 200, 'max1': 300, 'min2': 480, 'max2': 480}
             },
             'turn_rate': {
-                'sharp_left': {'min1': -180, 'max1': -100, 'min2': -180, 'max2': -100},
-                'left': {'min1': -150, 'max1': -50, 'min2': -150, 'max2': -50},
-                'straight': {'min1': -100, 'max1': -10, 'min2': 10, 'max2': 100},
-                'right': {'min1': 50, 'max1': 150, 'min2': 150, 'max2': 150},
-                'sharp_right': {'min1': 100, 'max1': 180, 'min2': 180, 'max2': 180}
+                'sharp_left': {'min1': -180, 'max1': -180, 'min2': -120, 'max2': -90},
+                'left': {'min1': -120, 'max1': -90, 'min2': -30, 'max2': -10},
+                'straight': {'min1': -30, 'max1': -10, 'min2': 10, 'max2': 30},
+                'right': {'min1': 10, 'max1': 30, 'min2': 90, 'max2': 120},
+                'sharp_right': {'min1': 90, 'max1': 120, 'min2': 180, 'max2': 180}
             }
         }
 
@@ -92,7 +84,7 @@ class GeneticAlgorithm:
                 self.all_param_ranges.append((ranges['min2'], ranges['max2']))  # p4
 
         # Setup DEAP framework
-        creator.create("FitnessMax", base.Fitness, weights=(1.0,))  # Maximizing fitness
+        creator.create("FitnessMax", base.Fitness, weights=(1.0,))
         creator.create("Individual", list, fitness=creator.FitnessMax)
 
         self.toolbox = base.Toolbox()
@@ -172,6 +164,13 @@ class GeneticAlgorithm:
         stats.register("min", np.min)
         stats.register("max", np.max)
 
+        # Use joblib's Parallel to evaluate fitness in parallel
+        def evaluate_population(evaluate_func, population):
+            return Parallel(n_jobs=-1)(delayed(evaluate_func)(ind) for ind in population)
+
+        # Replace DEAP's map with the evaluate_population function
+        self.toolbox.register("map", evaluate_population)
+
         pop, log = algorithms.eaSimple(pop, self.toolbox, cxpb=self.crossover_prob, mutpb=self.mutation_prob,
                                        ngen=self.generations, stats=stats, halloffame=hof, verbose=True)
 
@@ -184,12 +183,6 @@ class GeneticAlgorithm:
 
     def save_best_parameters(self, best_params: Tuple[Dict[str, List[float]], Dict[str, List[float]]],
                              filename='best_parameters.json'):
-        """
-        Save the best parameters to a JSON file in sorted order.
-        :param best_params: Tuple of (thrust_params, turn_rate_params)
-        :param filename: Name of the JSON file to save the parameters.
-        """
-        # Ensure all parameters are sorted (redundant if already sorted in decode_individual)
         for param_type in ['thrust_params', 'turn_rate_params']:
             for mf in best_params[0] if param_type == 'thrust_params' else best_params[1]:
                 best_params[0][mf] = sorted(best_params[0][mf]) if param_type == 'thrust_params' else sorted(
@@ -203,15 +196,14 @@ class GeneticAlgorithm:
 
         print(f"Best parameters saved to '{filename}'.")
 
-
 def run_ga_optimization():
-    ga = GeneticAlgorithm(population_size=3, generations=4, crossover_prob=0.7, mutation_prob=0.2)
+    ga = GeneticAlgorithm(population_size=12, generations=30, crossover_prob=0.9, mutation_prob=0.1)
+    start_time = time.time()
     best_params = ga.run()
+    print(f"Optimization took {time.time() - start_time:.2f} seconds.")
     ga.save_best_parameters(best_params)
     return best_params
 
-
 if __name__ == "__main__":
-    # Run the GA to optimize the controller
     best_parameters = run_ga_optimization()
     print("Optimization complete. Best parameters saved to 'best_parameters.json'.")

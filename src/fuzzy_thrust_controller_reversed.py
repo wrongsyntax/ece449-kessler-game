@@ -1,5 +1,5 @@
 # fuzzy_thrust_controller_reversed.py
-
+import random
 from typing import Dict, Tuple
 import numpy as np
 import skfuzzy as fuzz
@@ -24,22 +24,22 @@ class FuzzyThrustControllerReversed(KesslerController):
         # Default parameters if none provided
         if thrust_params is None:
             self.thrust_params = {
-                'reverse_full': [ -100, -100, -100, -50],
+                'reverse_full': [ -480, -480, -100, -50],
                 'reverse_medium': [ -70, -50, -20, -10],
                 'coast': [ -10, -5, 5, 10],
                 'forward_medium': [10, 20, 50, 70],
-                'forward_full': [50, 100, 100, 100]
+                'forward_full': [50, 100, 480, 480]
             }
         else:
             self.thrust_params = thrust_params
 
         if turn_rate_params is None:
             self.turn_rate_params = {
-                'sharp_left': [ -150, -150, -150, -100],
-                'left': [ -120, -120, -60, -60],
+                'sharp_left': [-180, -180, -150, -100],
+                'left': [ -180, -180, -120, -60],
                 'straight': [ -70, -5, 5, 70],
-                'right': [60, 120, 120, 120],
-                'sharp_right': [100, 150, 150, 150]
+                'right': [60, 120, 180, 180],
+                'sharp_right': [100, 150, 180, 180]
             }
         else:
             self.turn_rate_params = turn_rate_params
@@ -64,7 +64,7 @@ class FuzzyThrustControllerReversed(KesslerController):
         current_heading = normalize_angle(ship_state['heading'])
 
         # Calculate heading error
-        heading_error = normalize_angle(attack_heading - current_heading)
+        heading_error = normalize_angle(attack_heading - current_heading) + random.randint(-5, 5)
         # Convert to [-180, 180] range for the fuzzy system
         if heading_error > 180:
             heading_error -= 360
@@ -109,16 +109,16 @@ class FuzzyThrustControllerReversed(KesslerController):
             turn_rate = 0
 
         # Debug info
-        print(f"Frame: {self.eval_frames}")
-        print(f"Closest distance: {closest_features['distance']} px")
-        print(f"Relative angle: {closest_features['relative_angle'] * 180 / np.pi}º")
-        print(f"Time to collision: {closest_features['time_to_collision']} s")
-        print(f"Danger: {danger}")
-        print(f"Escape heading: {attack_heading}º")
-        print(f"Curr heading: {ship_state['heading']}º")
-        print(f"Heading error: {heading_error}º")
-        print(f"Thrust: {thrust}")
-        print(f"Turn rate: {turn_rate}")
+        # print(f"Frame: {self.eval_frames}")
+        # print(f"Closest distance: {closest_features['distance']} px")
+        # print(f"Relative angle: {closest_features['relative_angle'] * 180 / np.pi}º")
+        # print(f"Time to collision: {closest_features['time_to_collision']} s")
+        # print(f"Danger: {danger}")
+        # print(f"Escape heading: {attack_heading}º")
+        # print(f"Curr heading: {ship_state['heading']}º")
+        # print(f"Heading error: {heading_error}º")
+        # print(f"Thrust: {thrust}")
+        # print(f"Turn rate: {turn_rate}")
 
         thrust = thrust
         turn_rate = turn_rate
@@ -309,6 +309,9 @@ class FuzzyThrustControllerReversed(KesslerController):
         turn_rate['straight'] = fuzz.trapmf(turn_rate.universe, self.turn_rate_params['straight'])
         turn_rate['right'] = fuzz.trapmf(turn_rate.universe, self.turn_rate_params['right'])
         turn_rate['sharp_right'] = fuzz.trapmf(turn_rate.universe, self.turn_rate_params['sharp_right'])
+
+        # thrust.view()
+        # turn_rate.view()
 
         # Rules
         control_rules = [

@@ -27,6 +27,7 @@ my_test_scenario = Scenario(
     num_asteroids=15,
     ship_states=[
         {'position': (400, 400), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
+        # {'position': (600, 600), 'angle': 90, 'lives': 3, 'team': 2, 'mines_remaining': 3}
     ],
     map_size=(1000, 800),
     ammo_limit_multiplier=0,
@@ -37,7 +38,7 @@ my_test_scenario = Scenario(
 game_settings = {
     'perf_tracker': True,
     'graphics_type': GraphicsType.Tkinter,  # Enabled graphics using Tkinter
-    'realtime_multiplier': 0,  # Adjust as needed; set to 0 for max-speed simulation without delay
+    'realtime_multiplier': 1,  # Adjust as needed; set to 0 for max-speed simulation without delay
     'graphics_obj': None,
     'frequency': 30
 }

@@ -24,6 +24,7 @@ def run_simulation(controller):
             {'position': (400, 400), 'angle': 90, 'lives': 3, 'team': 1, "mines_remaining": 3},
         ],
         map_size=(1000, 800),
+        time_limit=60,
         ammo_limit_multiplier=0,
         stop_if_no_ammo=False
     )
