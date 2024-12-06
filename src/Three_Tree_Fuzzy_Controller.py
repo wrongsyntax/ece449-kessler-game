@@ -171,8 +171,8 @@ class FireRangerevController(KesslerController):
 
     def init_danger_fs(self):
         # Antecedent variables
-        distance = ctrl.Antecedent(np.arange(0, 1000, 5), 'distance')
-        relative_angle = ctrl.Antecedent(np.arange(-np.pi, np.pi, 0.03), 'relative_angle')
+        distance = ctrl.Antecedent(np.arange(0, 1000, 1), 'distance')
+        relative_angle = ctrl.Antecedent(np.arange(-np.pi, np.pi, 0.01), 'relative_angle')
         time_to_collision = ctrl.Antecedent(np.arange(0, 60, 0.5), 'time_to_collision')
 
         # Consequent variables
@@ -250,8 +250,8 @@ class FireRangerevController(KesslerController):
         # Antecedent variables
         danger_input = ctrl.Antecedent(np.arange(0, 100, 1), 'danger_input')
         current_speed = ctrl.Antecedent(np.arange(0, ship_state['max_speed'], 1), 'current_speed')
-        heading_error = ctrl.Antecedent(np.arange(-180, 180, 1.8),'heading_error')
-        relative_angle = ctrl.Antecedent(np.arange(-180, 180, 1.8), 'relative_angle')
+        heading_error = ctrl.Antecedent(np.arange(-180, 180, 1),'heading_error')
+        relative_angle = ctrl.Antecedent(np.arange(-180, 180, 1), 'relative_angle')
 
         # Consequent variables
         thrust = ctrl.Consequent(np.arange(ship_state['thrust_range'][0], ship_state['thrust_range'][1], 1), 'thrust')
@@ -277,22 +277,30 @@ class FireRangerevController(KesslerController):
 
         # thrust.automf(5, names=['reverse_full', 'reverse_medium', 'coast', 'forward_medium', 'forward_full'])
 
+        thrust_max = ship_state['thrust_range'][1]
+        thrust_min = ship_state['thrust_range'][0]
 
-        thrust['reverse_full'] = fuzz.trapmf(thrust.universe, [-485.12388885229996, -480.0, -209.92064304986738, -113.38948316202882])
-        thrust['reverse_medium'] = fuzz.trapmf(thrust.universe, [-197.6005358049042, -159.67035408595515, -30.065327601718206, -16.994466589099304])
-        thrust['coast'] = fuzz.trapmf(thrust.universe, [-53.91459562606114, -26.138678263266655, 16.19854350561498, 88.22390678195575])
-        thrust['forward_medium'] = fuzz.trapmf(thrust.universe, [30.132245414902957, 44.83782358236447, 104.9706531826428, 213.44947173635666])
-        thrust['forward_full'] = fuzz.trapmf(thrust.universe, [205.76242417553, 272.496840005617, 480.0, 480.0])
+        thrust['reverse_full'] = fuzz.trapmf(thrust.universe, [thrust_min, thrust_min, -100, -50])
+        thrust['reverse_medium'] = fuzz.trapmf(thrust.universe, [-70, -50, -20, -10])
+        thrust['coast'] = fuzz.trapmf(thrust.universe, [-10, -5, 5, 10])
+        thrust['forward_medium'] = fuzz.trapmf(thrust.universe, [10, 20, 50, 70])
+        thrust['forward_full'] = fuzz.trapmf(thrust.universe, [50, 100, thrust_max, thrust_max])
+
+        turn_max = ship_state['turn_rate_range'][1]
+        turn_min = ship_state['turn_rate_range'][0]
 
 
+        # turn_rate['sharp_left'] = fuzz.trapmf(turn_rate.universe, [turn_min, turn_min, -120, -60])
+        # turn_rate['left'] = fuzz.trapmf(turn_rate.universe, [-100, -60, -30, -10])
+        # turn_rate['straight'] = fuzz.trapmf(turn_rate.universe, [-10, -5, 5, 10])
+        # turn_rate['right'] = fuzz.trapmf(turn_rate.universe, [10, 30, 60, 100])
+        # turn_rate['sharp_right'] = fuzz.trapmf(turn_rate.universe, [60, 120, turn_max, turn_max])
 
-
-
-        turn_rate['sharp_left'] = fuzz.trapmf(turn_rate.universe, [-180.0, -180.0, -118.99000108265713, -109.21171939329406])
-        turn_rate['left'] = fuzz.trapmf(turn_rate.universe, [-115.44708882125961, -112.84280948081421, -16.041377984173593, -15.391761984844344])
-        turn_rate['straight'] = fuzz.trapmf(turn_rate.universe, [-28.644657858380256, -21.055905205944867, 11.481977634156195, 23.228277675199124])
-        turn_rate['right'] = fuzz.trapmf(turn_rate.universe, [29.529841227372632, 29.747777928264533, 96.3604409619254, 103.33453773900996])
-        turn_rate['sharp_right'] = fuzz.trapmf(turn_rate.universe, [93.88611617798037, 103.40751027979493, 180.0, 180.0])
+        turn_rate['sharp_left'] = fuzz.trapmf(turn_rate.universe, [turn_min, turn_min, -150, -100])
+        turn_rate['left'] = fuzz.trapmf(turn_rate.universe, [turn_min, turn_min, -120, -60])
+        turn_rate['straight'] = fuzz.trapmf(turn_rate.universe, [-70, -5, 5, 70])
+        turn_rate['right'] = fuzz.trapmf(turn_rate.universe, [60, 120, turn_max, turn_max])
+        turn_rate['sharp_right'] = fuzz.trapmf(turn_rate.universe, [100, 150, turn_max, turn_max])
 
         fire['no'] = fuzz.trimf(fire.universe, [-1, -1, 0.0])
         fire['yes'] = fuzz.trimf(fire.universe, [0.0, 1, 1])

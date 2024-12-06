@@ -9,6 +9,7 @@ from kesslergame import Scenario, KesslerGame, GraphicsType
 
 from src.fuzzy_thrust_controller import FuzzyThrustController
 from src.fuzzy_thrust_controller_reversed import FireRangerevController
+from src.fuzzy_thrust_controller_reversed_backup import FireRangerevControllerBack
 from src.scott_dick_controller import ScottDickController
 from test_controller import TestController
 from graphics_both import GraphicsBoth
@@ -18,7 +19,7 @@ my_test_scenario = Scenario(name='Test Scenario',
                             num_asteroids=15,
                             ship_states=[
                                 {'position': (400, 400), 'angle': 90, 'lives': 50, 'team': 1, "mines_remaining": 3},
-                                # {'position': (400, 600), 'angle': 90, 'lives': 50, 'team': 2, "mines_remaining": 3},
+                                 {'position': (400, 600), 'angle': 90, 'lives': 50, 'team': 2, "mines_remaining": 3},
                             ],
                             map_size=(1000, 800),
                             ammo_limit_multiplier=0,
@@ -36,7 +37,7 @@ game = KesslerGame(settings=game_settings)  # Use this to visualize the game sce
 
 # Evaluate the game
 pre = time.perf_counter()
-score, perf_data = game.run(scenario=my_test_scenario, controllers=[FireRangerevController()])
+score, perf_data = game.run(scenario=my_test_scenario, controllers=[FireRangerevControllerBack(), FireRangerevController()])
 
 # Print out some general info about the result
 print('Scenario eval time: '+str(time.perf_counter()-pre))

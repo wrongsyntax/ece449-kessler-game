@@ -16,7 +16,7 @@ def normalize_angle(angle):
     return angle % 360
 
 
-class FireRangerevController(KesslerController):
+class FireRangerevControllerBack(KesslerController):
     def __init__(self):
         self.danger_ctrl = None
         self.control_ctrl = None
@@ -171,8 +171,8 @@ class FireRangerevController(KesslerController):
 
     def init_danger_fs(self):
         # Antecedent variables
-        distance = ctrl.Antecedent(np.arange(0, 1000, 5), 'distance')
-        relative_angle = ctrl.Antecedent(np.arange(-np.pi, np.pi, 0.03), 'relative_angle')
+        distance = ctrl.Antecedent(np.arange(0, 1000, 1), 'distance')
+        relative_angle = ctrl.Antecedent(np.arange(-np.pi, np.pi, 0.01), 'relative_angle')
         time_to_collision = ctrl.Antecedent(np.arange(0, 60, 0.5), 'time_to_collision')
 
         # Consequent variables
@@ -250,8 +250,8 @@ class FireRangerevController(KesslerController):
         # Antecedent variables
         danger_input = ctrl.Antecedent(np.arange(0, 100, 1), 'danger_input')
         current_speed = ctrl.Antecedent(np.arange(0, ship_state['max_speed'], 1), 'current_speed')
-        heading_error = ctrl.Antecedent(np.arange(-180, 180, 1.8),'heading_error')
-        relative_angle = ctrl.Antecedent(np.arange(-180, 180, 1.8), 'relative_angle')
+        heading_error = ctrl.Antecedent(np.arange(-180, 180, 1),'heading_error')
+        relative_angle = ctrl.Antecedent(np.arange(-180, 180, 1), 'relative_angle')
 
         # Consequent variables
         thrust = ctrl.Consequent(np.arange(ship_state['thrust_range'][0], ship_state['thrust_range'][1], 1), 'thrust')
