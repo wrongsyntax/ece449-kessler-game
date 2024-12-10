@@ -2,8 +2,11 @@
 
 from genetic_algorithm import run_ga_optimization
 
+# Main function calling the other modules
+# The genetic algorithm will produce results after every generation
+# THe best chromosomes
 def main():
-    print("Starting Genetic Algorithm Optimization...")
+    print("Genetic algorithm in progress")
     best_parameters = run_ga_optimization()
     print("Optimization complete.")
     print("Best Parameters:")

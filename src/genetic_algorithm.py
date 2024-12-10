@@ -3,12 +3,12 @@ import json
 import time
 from deap import base, creator, tools, algorithms
 import numpy as np
-from fuzzy_thrust_controller_reversed import FuzzyThrustControllerReversed
+from ga_controller import FireRangerevController
 from ga_scenario_test import run_simulation
 from typing import List, Tuple, Dict
 from joblib import Parallel, delayed
 
-# Define custom crossover and mutation operators
+
 def mate_and_sort(ind1, ind2):
     """
     Custom crossover that performs two-point crossover and sorts parameters for each MF.
@@ -18,7 +18,7 @@ def mate_and_sort(ind1, ind2):
 
     # Define the number of genes per membership function
     genes_per_mf = 4
-    total_mfs = 10  # 5 thrust + 5 turn_rate
+    total_mfs = 10  # 5 thrust + 5 turn_rate membership classes
 
     for i in range(total_mfs):
         start = i * genes_per_mf
@@ -32,7 +32,7 @@ def mutate_and_sort(individual, mu=0, sigma=10, indpb=0.2):
     """
     Custom mutation that applies Gaussian mutation and sorts parameters for each MF.
     """
-    # Apply Gaussian mutation
+
     tools.mutGaussian(individual, mu, sigma, indpb)
 
     # Define the number of genes per membership function
@@ -46,7 +46,7 @@ def mutate_and_sort(individual, mu=0, sigma=10, indpb=0.2):
 
     return individual,
 
-# Define the GeneticAlgorithm class
+# Main function that runs the genetic algorithm
 class GeneticAlgorithm:
     def __init__(self, population_size=3, generations=4, crossover_prob=0.7, mutation_prob=0.2):
         self.population_size = population_size
@@ -83,17 +83,15 @@ class GeneticAlgorithm:
                 self.all_param_ranges.append((ranges['min2'], ranges['max2']))  # p3
                 self.all_param_ranges.append((ranges['min2'], ranges['max2']))  # p4
 
-        # Setup DEAP framework
+        # Fitness framework
         creator.create("FitnessMax", base.Fitness, weights=(1.0,))
         creator.create("Individual", list, fitness=creator.FitnessMax)
 
         self.toolbox = base.Toolbox()
 
-        # Define 'initIndividual' method
+        # Required tool box attributes
         self.toolbox.register("individual", self.initIndividual)
         self.toolbox.register("population", tools.initRepeat, list, self.toolbox.individual)
-
-        # Register custom operators
         self.toolbox.register("mate", mate_and_sort)
         self.toolbox.register("mutate", mutate_and_sort, mu=0, sigma=10, indpb=0.2)
         self.toolbox.register("select", tools.selTournament, tournsize=3)
@@ -101,8 +99,7 @@ class GeneticAlgorithm:
 
     def initIndividual(self):
         """
-        Initialize an individual with random parameters within the specified ranges.
-        :return: An Individual instance.
+        Initialize an individual with random parameters within the ranges.
         """
         individual = []
         for (min_val, max_val) in self.all_param_ranges:
@@ -114,8 +111,6 @@ class GeneticAlgorithm:
         """
         Decode the individual list into thrust and turn_rate parameter dictionaries.
         Each set of four parameters is sorted to satisfy a <= b <= c <= d.
-        :param individual: List of floats representing the individual's genes.
-        :return: Tuple of (thrust_params, turn_rate_params)
         """
         thrust_params = {}
         turn_rate_params = {}
@@ -132,14 +127,12 @@ class GeneticAlgorithm:
 
     def fitness(self, individual: List[float]) -> Tuple[float,]:
         """
-        Fitness function that evaluates how well the controller with given parameters performs.
-        :param individual: List of parameters representing membership function boundaries.
-        :return: Tuple containing the fitness score.
+        Fitness function evaluating how well parameters oerformed based on (asteroids_hit * 10) - (deaths * 20) + (accuracy * 5) - (mean_eval_time * 1)
         """
         thrust_params, turn_rate_params = self.decode_individual(individual)
 
         # Initialize the controller with these parameters
-        controller = FuzzyThrustControllerReversed(thrust_params=thrust_params, turn_rate_params=turn_rate_params)
+        controller = FireRangerevController(thrust_params=thrust_params, turn_rate_params=turn_rate_params)
 
         # Run the game simulation using scenario_test.py's run_simulation function
         try:
@@ -153,7 +146,6 @@ class GeneticAlgorithm:
     def run(self) -> Tuple[Dict[str, List[float]], Dict[str, List[float]]]:
         """
         Run the genetic algorithm optimization process.
-        :return: Best found parameters as a tuple (thrust_params, turn_rate_params).
         """
         pop = self.toolbox.population(n=self.population_size)
         hof = tools.HallOfFame(1)  # Keep track of the best individual
@@ -164,7 +156,7 @@ class GeneticAlgorithm:
         stats.register("min", np.min)
         stats.register("max", np.max)
 
-        # Use joblib's Parallel to evaluate fitness in parallel
+        # Evaluating fitness in parallel for accelerated training
         def evaluate_population(evaluate_func, population):
             return Parallel(n_jobs=-1)(delayed(evaluate_func)(ind) for ind in population)
 
@@ -197,7 +189,7 @@ class GeneticAlgorithm:
         print(f"Best parameters saved to '{filename}'.")
 
 def run_ga_optimization():
-    ga = GeneticAlgorithm(population_size=12, generations=30, crossover_prob=0.9, mutation_prob=0.1)
+    ga = GeneticAlgorithm(population_size=2, generations=3, crossover_prob=0.9, mutation_prob=0.1)
     start_time = time.time()
     best_params = ga.run()
     print(f"Optimization took {time.time() - start_time:.2f} seconds.")

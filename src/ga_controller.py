@@ -1,22 +1,23 @@
-# fuzzy_thrust_controller_reversed.py
-import random
+from time import time_ns
 from typing import Dict, Tuple
+
 import numpy as np
 import skfuzzy as fuzz
+import random
 from skfuzzy import control as ctrl
-from kesslergame import KesslerController, GraphicsType  # Ensure GraphicsType is imported if used
+
+from kesslergame import KesslerController
+
+# This controller sometimes is more accurate then fuzzy reversed
+# To make it the same as fuzzy reversed just set the nos back to yes
 
 def normalize_angle(angle):
     """Normalize angle to [0, 360] range"""
     return angle % 360
 
-class FuzzyThrustControllerReversed(KesslerController):
-    def __init__(self, thrust_params=None, turn_rate_params=None):
-        """
-        Initialize the fuzzy controller with optional membership function parameters.
-        :param thrust_params: Dictionary containing membership function boundaries for thrust.
-        :param turn_rate_params: Dictionary containing membership function boundaries for turn_rate.
-        """
+
+class FireRangerevController(KesslerController):
+    def __init__(self, thrust_params, turn_rate_params):
         self.danger_ctrl = None
         self.control_ctrl = None
         self.eval_frames = 0
@@ -107,22 +108,25 @@ class FuzzyThrustControllerReversed(KesslerController):
             turn_rate = control_sim.output['turn_rate']
         except KeyError:
             turn_rate = 0
-
+        try:
+            fire = control_sim.output['fire']
+        except KeyError:
+            fire = True
         # Debug info
-        # print(f"Frame: {self.eval_frames}")
-        # print(f"Closest distance: {closest_features['distance']} px")
-        # print(f"Relative angle: {closest_features['relative_angle'] * 180 / np.pi}º")
-        # print(f"Time to collision: {closest_features['time_to_collision']} s")
-        # print(f"Danger: {danger}")
-        # print(f"Escape heading: {attack_heading}º")
-        # print(f"Curr heading: {ship_state['heading']}º")
-        # print(f"Heading error: {heading_error}º")
-        # print(f"Thrust: {thrust}")
-        # print(f"Turn rate: {turn_rate}")
+        #print(f"Frame: {self.eval_frames}")
+        #print(f"Closest distance: {closest_features['distance']} px")
+        #print(f"Relative angle: {closest_features['relative_angle'] * 180 / np.pi}º")
+        #print(f"Time to collision: {closest_features['time_to_collision']} s")
+        #print(f"Danger: {danger}")
+        #print(f"Escape heading: {attack_heading}º")
+        #print(f"Curr heading: {ship_state['heading']}º")
+        #print(f"Heading error: {heading_error}º")
+        #print(f"Thrust: {thrust}")
+        #print(f"Turn rate: {turn_rate}")
 
         thrust = thrust
         turn_rate = turn_rate
-        fire = True
+        fire = fire
         drop_mine = False
         self.eval_frames += 1
         return thrust, turn_rate, fire, drop_mine
@@ -156,7 +160,8 @@ class FuzzyThrustControllerReversed(KesslerController):
             asteroid_y = asteroid['position'][1]
 
             # Calculate center-to-center distance
-            center_distance = np.sqrt((ship_x - asteroid_x) ** 2 + (ship_y - asteroid_y) ** 2)
+            center_distance = np.sqrt((ship_x - asteroid_x) ** 2 + (ship_y - asteroid_y) ** 2 - 10)
+            # constant for safety margin
 
             # Calculate actual distance by subtracting both radii
             edge_distance = center_distance - (ship_state['radius'] + asteroid['radius'])
@@ -178,11 +183,8 @@ class FuzzyThrustControllerReversed(KesslerController):
         relative_vx = asteroid_vx - ship_vx
         relative_vy = asteroid_vy - ship_vy
 
-        speed = np.sqrt(relative_vx ** 2 + relative_vy ** 2)
-        if speed != 0:
-            time_to_collision = closest_distance / speed
-        else:
-            time_to_collision = np.inf
+        time_to_collision = (closest_distance / np.sqrt(
+            relative_vx ** 2 + relative_vy ** 2)) if relative_vx != 0 or relative_vy != 0 else np.inf
 
         return {
             "distance": closest_distance,
@@ -192,8 +194,8 @@ class FuzzyThrustControllerReversed(KesslerController):
 
     def init_danger_fs(self):
         # Antecedent variables
-        distance = ctrl.Antecedent(np.arange(0, 1000, 1), 'distance')
-        relative_angle = ctrl.Antecedent(np.arange(-np.pi, np.pi, 0.01), 'relative_angle')
+        distance = ctrl.Antecedent(np.arange(0, 1000, 5), 'distance')
+        relative_angle = ctrl.Antecedent(np.arange(-np.pi, np.pi, 0.03), 'relative_angle')
         time_to_collision = ctrl.Antecedent(np.arange(0, 60, 0.5), 'time_to_collision')
 
         # Consequent variables
@@ -228,7 +230,7 @@ class FuzzyThrustControllerReversed(KesslerController):
         danger['high'] = fuzz.trapmf(danger.universe, [60, 70, 80, 90])
         danger['very_high'] = fuzz.trapmf(danger.universe, [80, 90, 100, 100])
 
-        # Add rules
+        # Add a default rule to ensure there's always an output
         danger_rules = [
             # Default rule - if no other rules match
             ctrl.Rule(~(time_to_collision['imminent'] | time_to_collision['close'] | time_to_collision['medium']),
@@ -271,14 +273,14 @@ class FuzzyThrustControllerReversed(KesslerController):
         # Antecedent variables
         danger_input = ctrl.Antecedent(np.arange(0, 100, 1), 'danger_input')
         current_speed = ctrl.Antecedent(np.arange(0, ship_state['max_speed'], 1), 'current_speed')
-        heading_error = ctrl.Antecedent(np.arange(-180, 180, 1),'heading_error')
-        relative_angle = ctrl.Antecedent(np.arange(-180, 180, 1), 'relative_angle')
+        heading_error = ctrl.Antecedent(np.arange(-180, 180, 1.8),'heading_error')
+        relative_angle = ctrl.Antecedent(np.arange(-180, 180, 1.8), 'relative_angle')
 
         # Consequent variables
         thrust = ctrl.Consequent(np.arange(ship_state['thrust_range'][0], ship_state['thrust_range'][1], 1), 'thrust')
         turn_rate = ctrl.Consequent(np.arange(ship_state['turn_rate_range'][0], ship_state['turn_rate_range'][1], 1),
                                     'turn_rate')
-
+        fire = ctrl.Consequent(np.arange(-1, 1, 0.1), 'fire')
         # Membership functions
         danger_input.automf(5, names=['very_low', 'low', 'medium', 'high', 'very_high'])
         current_speed.automf(4, names=['stopped', 'slow', 'medium', 'fast'])
@@ -296,6 +298,9 @@ class FuzzyThrustControllerReversed(KesslerController):
         relative_angle['back_left'] = fuzz.trapmf(relative_angle.universe, [-180, -180, -110, -90])
         relative_angle['back_right'] = fuzz.trapmf(relative_angle.universe, [90, 110, 180, 180])
 
+        # thrust.automf(5, names=['reverse_full', 'reverse_medium', 'coast', 'forward_medium', 'forward_full'])
+
+
         # Define thrust membership functions using parameters
         thrust['reverse_full'] = fuzz.trapmf(thrust.universe, self.thrust_params['reverse_full'])
         thrust['reverse_medium'] = fuzz.trapmf(thrust.universe, self.thrust_params['reverse_medium'])
@@ -310,84 +315,85 @@ class FuzzyThrustControllerReversed(KesslerController):
         turn_rate['right'] = fuzz.trapmf(turn_rate.universe, self.turn_rate_params['right'])
         turn_rate['sharp_right'] = fuzz.trapmf(turn_rate.universe, self.turn_rate_params['sharp_right'])
 
-        # thrust.view()
-        # turn_rate.view()
+        fire['no'] = fuzz.trimf(fire.universe, [-1, -1, 0.0])
+        fire['yes'] = fuzz.trimf(fire.universe, [0.0, 1, 1])
 
         # Rules
         control_rules = [
             # Emergency avoidance rules
             # If asteroid is in front, and we're not pointed away, reverse
-            ctrl.Rule(
-                danger_input['very_high'] & relative_angle['front'] & ~heading_error['large_negative'] & ~heading_error['large_positive'],
-                thrust['reverse_full']),
+        ctrl.Rule(danger_input['very_high'] & relative_angle['front'] & ~heading_error['large_negative'] & ~heading_error[
+                'large_positive'],
+            (thrust['reverse_full'], fire['yes'])),
 
-            # If asteroid is in front-left or front-right and we're not pointed away, reverse
-            ctrl.Rule(danger_input['very_high'] & (relative_angle['front_left'] | relative_angle['front_right']) &
-                      ~heading_error['large_negative'] & ~heading_error['large_positive'],
-                      thrust['reverse_medium']),
+        # If asteroid is in front-left or front-right and we're not pointed away, reverse
+        ctrl.Rule(danger_input['very_high'] & (relative_angle['front_left'] | relative_angle['front_right']) & ~
+        heading_error['large_negative'] & ~heading_error['large_positive'],
+                  (thrust['reverse_medium'], fire['yes'])),
 
-            # If asteroid is behind (back_left or back_right) and we're pointed away, go forward
-            ctrl.Rule(danger_input['very_high'] & (relative_angle['back_left'] | relative_angle['back_right']) &
-                      heading_error['zero'],
-                      thrust['forward_full']),
+        # If asteroid is behind (back_left or back_right) and we're pointed away, go forward
+        ctrl.Rule(danger_input['very_high'] & (relative_angle['back_left'] | relative_angle['back_right']) &
+                  heading_error['zero'],
+                  (thrust['forward_full'], fire['yes'])),
 
-            # High danger responses
-            ctrl.Rule(danger_input['high'] & relative_angle['front'] & heading_error['zero'],
-                      thrust['reverse_medium']),
+        # High danger responses
+        ctrl.Rule(danger_input['high'] & relative_angle['front'] & heading_error['zero'],
+                  (thrust['reverse_medium'], fire['yes'])),
 
-            ctrl.Rule(
-                danger_input['high'] & (relative_angle['back_left'] | relative_angle['back_right']) & heading_error['zero'],
-                thrust['forward_medium']),
+        ctrl.Rule(
+            danger_input['high'] & (relative_angle['back_left'] | relative_angle['back_right']) & heading_error[
+                'zero'],
+            (thrust['forward_medium'], fire['yes'])),
 
-            # Medium danger - more conservative
-            ctrl.Rule(danger_input['medium'] & current_speed['fast'],
-                      thrust['coast']),
+        # Medium danger - more conservative
+        ctrl.Rule(danger_input['medium'] & current_speed['fast'],
+                  (thrust['coast'], fire['yes'])),
 
-            ctrl.Rule(danger_input['medium'] & current_speed['stopped'] & relative_angle['front'],
-                      thrust['reverse_medium']),
+        ctrl.Rule(danger_input['medium'] & current_speed['stopped'] & relative_angle['front'],
+                  (thrust['reverse_medium'], fire['yes'])),
+
 
             # When well-aligned and not too close, move forward
             ctrl.Rule(heading_error['zero'] & ~danger_input['very_high'],
-                      thrust['forward_medium']),
+                      (thrust['forward_medium'], fire['yes'])),
 
             # When perfectly aligned and at safe distance, full thrust
             ctrl.Rule(heading_error['zero'] & danger_input['low'],
-                      thrust['forward_full']),
+                      (thrust['forward_full'], fire['yes'])),
 
             # When turning but at safe distance, maintain some forward momentum
             ctrl.Rule((heading_error['small_negative'] | heading_error['small_positive']) & danger_input['low'],
-                      thrust['forward_medium']),
+                      (thrust['forward_medium'], fire['yes'])),
 
             # When stopped and target in sight, start moving
             ctrl.Rule(current_speed['stopped'] & heading_error['zero'] & ~danger_input['very_high'],
-                      thrust['forward_medium']),
+                      (thrust['forward_medium'],fire['yes'])),
 
             # Only reverse if in extreme danger and very close
             ctrl.Rule(danger_input['very_high'] & relative_angle['front'] & current_speed['fast'],
-                      thrust['reverse_full']),
+                      (thrust['reverse_full'], fire['yes'])),
 
             # Otherwise try to turn and maintain forward momentum
             ctrl.Rule(danger_input['high'] & ~relative_angle['front'],
-                      thrust['forward_medium']),
+                      (thrust['forward_medium'], fire['yes'])),
 
             # When danger is moderate, maintain speed
             ctrl.Rule(danger_input['medium'],
-                      thrust['coast']),
+                      (thrust['coast'], fire['yes'])),
 
             # Low danger - tend towards stopping
             ctrl.Rule(danger_input['low'] & current_speed['fast'],
-                      thrust['coast']),
-
+                      (thrust['coast'],fire['yes'])),
             # Turning rules
-            ctrl.Rule(heading_error['large_negative'], turn_rate['sharp_left']),
-            ctrl.Rule(heading_error['small_negative'], turn_rate['left']),
-            ctrl.Rule(heading_error['zero'], turn_rate['straight']),
-            ctrl.Rule(heading_error['small_positive'], turn_rate['right']),
-            ctrl.Rule(heading_error['large_positive'], turn_rate['sharp_right'])
+            ctrl.Rule(heading_error['large_negative'], (turn_rate['sharp_left'], fire['yes'])),
+            ctrl.Rule(heading_error['small_negative'], (turn_rate['left'], fire['yes'])),
+            ctrl.Rule(heading_error['zero'], (turn_rate['straight'], fire['yes'])),
+            ctrl.Rule(heading_error['small_positive'], (turn_rate['right'], fire['yes'])),
+            ctrl.Rule(heading_error['large_positive'], (turn_rate['sharp_right'], fire['yes']))
         ]
 
         return ctrl.ControlSystem(control_rules)
 
     @property
     def name(self) -> str:
-        return "Fuzzy Thrust Controller"
+        return "Fire Range Controller"

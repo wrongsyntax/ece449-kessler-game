@@ -3,10 +3,7 @@
 import time
 from kesslergame import Scenario, GraphicsType, TrainerEnvironment, KesslerGame
 
-from fuzzy_thrust_controller_reversed import FuzzyThrustControllerReversed
-# from scott_dick_controller import ScottDickController  # Uncomment if needed
-from test_controller import TestController
-from graphics_both import GraphicsBoth
+from ga_controller import FireRangerevController
 
 
 def run_simulation(controller):
@@ -65,6 +62,6 @@ def run_simulation(controller):
 
 if __name__ == "__main__":
     # Optional: Run a single simulation manually for testing
-    controller = FuzzyThrustControllerReversed()
+    controller = FireRangerevController()
     fitness = run_simulation(controller)
     print(f"Fitness Score: {fitness}")

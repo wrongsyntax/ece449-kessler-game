@@ -5,16 +5,15 @@ import json
 
 from kesslergame import Scenario, GraphicsType, TrainerEnvironment, KesslerGame
 
-from fuzzy_thrust_controller_reversed import FuzzyThrustControllerReversed
+from ga_controller import FireRangerevController
 # from scott_dick_controller import ScottDickController  # Uncomment if needed
-from test_controller import TestController
 from graphics_both import GraphicsBoth
 
-# Load optimized parameters if available
+# This is the code top open and load the best parameters inside best_parameters.json
 
 with open('best_parameters.json', 'r') as f:
     optimized_params = json.load(f)
-optimized_controller = FuzzyThrustControllerReversed(
+optimized_controller = FireRangerevController(
     thrust_params=optimized_params['thrust_params'],
     turn_rate_params=optimized_params['turn_rate_params']
 )
